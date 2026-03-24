@@ -13,94 +13,49 @@ def baseline_generator(p, n):
         yield np.random.binomial(n=1, p=p)
 
 
-def test_is_coin_fair(coin_function, max_samples=10000):
-    """
-    TDD Test to verify if a stochastic coin function is "Fair".
-
-    :param coin_function: A callable function that returns 1 (Heads) or 0 (Tails).
-    :param max_samples: The maximum iterations the CI/CD pipeline will wait before timing out.
-    """
-
-    # ---------------------------------------------------------
-    # 1. Product Owner Requirements
-    # ---------------------------------------------------------
-    target_probability = 0.50
-    tolerance_threshold = 0.05
-    target_accuracy = 0.99
-
-    # ---------------------------------------------------------
-    # 2. Data Generation (as generators)
-    # ---------------------------------------------------------
+def test_is_coin_fair(coin_function, max_samples, alpha, sigma, lower_bound):
     y = coin_generator(coin_function, max_samples)
-
-    np.random.seed(42)
-    x = baseline_generator(target_probability, max_samples)
-
-    # ---------------------------------------------------------
-    # 3. Execute the Sequential Test
-    # ---------------------------------------------------------
-    alpha_value = 1.0 - target_accuracy
+    x = baseline_generator(0.50, max_samples)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-
-        # SWAPPED X AND Y:
-        # x = live code (what we are testing)
-        # y = perfect baseline (the target)
-        # This inverts the logic so "Accept H1" means "Code is Different (Broken)"
-
         result = sequential_test(
-            x=y,       # Live code (treatment)
-            y=x,       # Perfect target (control)
-            theta=0.0, # We expect ZERO difference between them
-            sigma=0.5, # StdDev for Bernoulli distribution
-            alpha=alpha_value,
+            x=y,
+            y=x,
+            theta=0.0,
+            sigma=sigma,
+            alpha=alpha,
             distribution='bernoulli',
-            lower_bound=0.05,  # Lower decision boundary for early H0 acceptance
+            lower_bound=lower_bound,
         )
 
-    # ---------------------------------------------------------
-    # 4. TDD Assertions (Green / Red Outcomes)
-    # ---------------------------------------------------------
-
-    # The 'decision' attribute tells us the final result
-    # 'Accept H1' means: "I found evidence that X and Y are DIFFERENT" (BROKEN)
-    # Anything else means: "I found no evidence they are different" (PASS)
-
-    decision = getattr(result, 'decision', None)
-
-    if decision == 'Accept H1':
-        # The math found proof that the code deviates from the target
-        print(f"❌ FAIL: The coin is rigged! (Rejected H0).")
-        print(f"   The code deviated past the {tolerance_threshold*100}% boundaries.")
-        print(f"   Stopped early after {result.number_of_observations} of {max_samples} samples.")
-        print(result)
-        return False, "Coin function is outside acceptable probability bounds."
-
-    else:
-        # We reached max_samples without finding evidence of a bug
-        print(f"✅ PASS: No statistical evidence of bias found after {result.number_of_observations} samples.")
-        print(result)
-        return True, "Coin function is within acceptable probability bounds."
+    passed = result.decision != 'Accept H1'
+    return passed, result.number_of_observations
 
 
-# =====================================================================
-# EXAMPLE USAGE:
-# =====================================================================
 if __name__ == "__main__":
+    import argparse
     import random
 
-    # Scenario 1: Perfect Coin
-    def perfect_coin():
-        return 1 if random.random() < 0.50 else 0
+    parser = argparse.ArgumentParser(description="Test coin fairness using sequential testing")
+    parser.add_argument("-n", "--trials", type=int, default=100, help="number of trials (default: 100)")
+    parser.add_argument("-s", "--samples", type=int, default=10000, help="max samples per trial (default: 10000)")
+    parser.add_argument("-a", "--alpha", type=float, default=0.01, help="significance level (default: 0.01)")
+    parser.add_argument("--sigma", type=float, default=0.5, help="standard deviation (default: 0.5)")
+    parser.add_argument("--lower-bound", type=float, default=0.05, help="lower decision boundary (default: 0.05)")
+    parser.add_argument("--rigged-prob", type=float, default=0.58, help="rigged coin heads probability (default: 0.58)")
+    args = parser.parse_args()
 
-    print("Testing Perfect Coin...")
-    test_is_coin_fair(perfect_coin)
-    print("-" * 40)
+    make_fair = lambda: 1 if random.random() < 0.50 else 0
+    make_rigged = lambda: 1 if random.random() < args.rigged_prob else 0
 
-    # Scenario 2: Broken Coin (70% heads)
-    def broken_coin():
-        return 1 if random.random() < 0.58 else 0
+    fair_results = [test_is_coin_fair(make_fair, args.samples, args.alpha, args.sigma, args.lower_bound) for _ in range(args.trials)]
+    fair_pass = sum(p for p, _ in fair_results)
+    fair_obs = [n for _, n in fair_results]
 
-    print("Testing Broken Coin...")
-    test_is_coin_fair(broken_coin)
+    rigged_results = [test_is_coin_fair(make_rigged, args.samples, args.alpha, args.sigma, args.lower_bound) for _ in range(args.trials)]
+    rigged_fail = sum(not p for p, _ in rigged_results)
+    rigged_obs = [n for _, n in rigged_results]
+
+    print(f"Fair coin:   {fair_pass}/{args.trials} passed   (samples: {np.mean(fair_obs):.1f} +/- {np.std(fair_obs):.1f})")
+    print(f"Rigged coin: {rigged_fail}/{args.trials} detected (samples: {np.mean(rigged_obs):.1f} +/- {np.std(rigged_obs):.1f})")
