@@ -1,16 +1,16 @@
 [tool.poetry]
-name = "msprt"
+name = "sequential-test"
 version = "0.1.0"
 description = ""
-authors = ["Ovidijus Kuzminas <https://github.com/ovidijusku>"]
+authors = ["Roberto Abdelkader Martínez Pérez <robertomartinezp@gmail.com>"]
 license = "GPL-3.0-or-later"
 readme = "README.md"
+packages = [{include = "sequential_test", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10, <3.13"
 numpy = "^1.26.1"
 scipy = "^1.11.3"
-matplotlib = "^3.8.1"
 
 [build-system]
 requires = ["poetry-core"]

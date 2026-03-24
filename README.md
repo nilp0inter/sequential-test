@@ -1,99 +1,111 @@
-# Python mSPRT Package:
+# Sequential Test
 
-This package provides a Python implementation for calculating the Mixture Sequential Probability Ratio Test (mSPRT). 
+A Python library for sequential hypothesis testing. Useful for A/B testing and other scenarios where you want to reach a decision as early as the data allows, without waiting for a fixed sample size.
 
-mSPRT is a statistical hypothesis test that can be used to decide if a observed data supports one of two hypotheses, based on a sequence of independent and identically distributed observations.
+## Installation
 
-Main functionalities:
-1. Calculating mixture variance
+```bash
+pip install sequential-test
+```
+
+Requires Python >=3.10, <3.13.
+
+## Dependencies
+
+- NumPy
+- SciPy
+
+## Usage
+
+```python
+from sequential_test import sequential_test
+```
+
+### Normal distribution (default)
+
+```python
+result = sequential_test(x=x, y=y, sigma=1.0)
+```
+
+### Bernoulli distribution
+
+```python
+result = sequential_test(
+    x=x,
+    y=y,
+    theta=0.0,
+    sigma=0.5,
+    distribution="bernoulli",
+    alpha=0.01,
+    lower_bound=0.05,
+)
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `x` | Iterable | required | Treatment observations |
+| `y` | Iterable | required | Control observations |
+| `sigma` | float | `0.0` | Known standard deviation (used for normal distribution) |
+| `theta` | float | `0.0` | Hypothesized difference under H0 |
+| `truncation` | float | `200` | Maximum number of observations for mixture variance calculation |
+| `distribution` | str | `"normal"` | `"normal"` or `"bernoulli"` |
+| `alpha` | float | `0.05` | Significance level |
+| `warmup_observations` | int | `100` | Observations to collect before testing begins |
+| `lower_bound` | float \| None | `None` | Lower decision boundary for early H0 acceptance. When set, the test stops early if the likelihood ratio drops below this value. |
+
+### Result
+
+`sequential_test()` returns a `SequentialTestResult` with the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `distribution` | str | Distribution used |
+| `number_of_observations` | int | Total observations processed |
+| `likelihood_ratios` | list[float] | Likelihood ratio at each step |
+| `stopping_time` | int | Observation at which a decision was reached |
+| `decision` | str | `"Accept H1"` or `"Accept H0"` |
+| `text` | str | Human-readable summary |
+| `alpha` | float | Significance level used |
+
+## How it works
+
+### Mixture variance
 
 $$
 \tau^2 = \sigma^2 \frac{\Phi(-b)}{\frac{1}{b}\phi(b)-\Phi(-b)}
 $$
 
-2. Calculating test statistic for normal distribution
+### Test statistic (normal)
 
 $$
-\tilde{\Lambda}_n = \sqrt{\frac{2\sigma^2}{V_n + n\tau^2}}\exp\left(\frac{n^2\tau^2(\bar{Y}_n - \bar{X}_n-\theta_0)^2}{4\sigma^2(2\sigma^2+n\tau^2)}\right).
+\tilde{\Lambda}_n = \sqrt{\frac{2\sigma^2}{2\sigma^2 + n\tau^2}}\exp\left(\frac{n^2\tau^2(\bar{X}_n - \bar{Y}_n-\theta_0)^2}{4\sigma^2(2\sigma^2+n\tau^2)}\right)
 $$
 
-3. Calculating test statistic for Bernoulli distribution
+### Test statistic (Bernoulli)
 
 $$
-\tilde{\Lambda}_n = \sqrt{\frac{V_n}{V_n + n\tau^2}}\exp{\left(\frac{n^2\tau^2(\bar{Y}_n - \bar{X}_n-\theta_0)^2}{2V_n(V_n+n\tau^2)}\right)}
+\tilde{\Lambda}_n = \sqrt{\frac{V_n}{V_n + n\tau^2}}\exp{\left(\frac{n^2\tau^2(\bar{X}_n - \bar{Y}_n-\theta_0)^2}{2V_n(V_n+n\tau^2)}\right)}
 $$
 
+The test rejects H0 when the likelihood ratio exceeds $1/\alpha$. If `lower_bound` is set, it accepts H0 early when the ratio drops below that threshold.
 
+### Differences from standard mSPRT
 
-## Installation:
+This library extends the classic mSPRT in two ways:
 
-The mSPRT package can be easily installed using pip:
+- **Lower decision boundary** — standard mSPRT only tests against an upper threshold ($1/\alpha$) and can only reject H0. The optional `lower_bound` parameter adds a lower threshold for early H0 acceptance, closer to a two-sided SPRT.
+- **Warmup period** — standard mSPRT evaluates from the first observation. The `warmup_observations` parameter skips a configurable number of initial observations to avoid noisy early decisions.
 
-```bash
-pip install msprt
-```
+## References
 
-## Pre-requisite
-Python >=3.10;<3.13
+1. Wald, A. (1945). Sequential Tests of Statistical Hypotheses. *The Annals of Mathematical Statistics*, 16(2), 117–186. [DOI: 10.1214/aoms/1177731118](https://doi.org/10.1214/aoms/1177731118)
+2. Robbins, H. (1970). Statistical Methods Related to the Law of the Iterated Logarithm. *The Annals of Mathematical Statistics*, 41(5), 1397–1409. [DOI: 10.1214/aoms/1177696786](https://doi.org/10.1214/aoms/1177696786)
+3. Johari, R., Koomen, P., Pekelis, L., & Walsh, D. (2022). Always Valid Inference: Continuous Monitoring of A/B Tests. *Operations Research*, 70(3), 1806–1821. [DOI: 10.1287/opre.2021.2135](https://doi.org/10.1287/opre.2021.2135)
+4. Stenberg, E. mixtureSPRT — R and C++ implementation. [GitHub](https://github.com/erik-stenberg/mixtureSPRT)
+5. Kuzminas, O. msprt — original Python implementation. [GitHub](https://github.com/ovidijusku/msprt/tree/main)
 
-## Dependencies:
+## License
 
-The mSPRT package depends on the following Python libraries:
-- Numpy
-- Scipy
-- Matplotlib
-
-These dependencies can also be easily installed using pip:
-
-```bash
-pip install numpy scipy matplotlib
-```
-
-## How to Use:
-
-First, import the mSPRT package:
-
-```python
-from msprt import msprt
-```
-
-Then, prepare the two sample lists that you want to compare.
-
-```python
-x = [0.1, 0.2, 0.3, 0.5, 0.7, 0.9]
-y = [0.2, 0.1, 0.4, 0.6, 0.7, 0.8]
-```
-
-Next, call the `msprt` object with observation lists, along with the parameters for the mSPRT test, such as the `alpha` and the `theta` values (by default it assumes you are using a normal distribution and alpha is set to 0.05).
-
-```python
-result = msprt(x=x, y=y, sigma=1.0)
-```
-
-If you want to use a Bernoulli distribution, specify it as such:
-
-```python
-result = msprt(x=x, y=y, theta=0.5, distribution='bernoulli')
-```
-
-To plot the results, use the `plot` method:
-
-```python
-result.plot()
-```
-
-For detailed information about each parameter, please refer to the comments in the source code.
-
-## Contact:
-
-If you find any problems with the implementation, you can leave the ticket on Github.
-
-[mSPRT GitHub Page](https://github.com/ovidijusku/msprt)
-
-## License:
-
-This project is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation. See the `LICENSE` file for more information.
-
-## References (real heroes)
-1. Johari, R., Pekelis, L., & Walsh, D. J. (2019). Always Valid Inference: Bringing Sequential Analysis to A/B Testing. arXiv:1512.04922 [math.ST]. [Link to the paper](https://doi.org/10.48550/arXiv.1512.04922)
-2. The R and C++ implementations of the paper are available in the GitHub repository maintained by Erik Stenberg: [GitHub Repository](https://github.com/erik-stenberg/mixtureSPRT).
+This project is licensed under the GPL-3.0-or-later license.
